@@ -26,24 +26,25 @@
 # Part 1. GitHub terminology ----------------------------------------------
 
 # 1. What is the difference between clone and pull?
-#
+# clone is a copy, pull is an update
 
 
 # 2. What is the difference between commit and push?
-#
+# commit is a local save, push is a global repo save
 
 
 # 3. Which repository contains the instructor's original course materials?
-#
+# course-hub
 
 
 # 4. Which repository should contain your completed tutorials and exercises?
-#
+# tutorials-exercises
 
 
 # 5. What should you do before beginning work in a repository that you have
 #    already cloned to your computer?
-#
+# commit & push the copy to the tutorials-exercises folder, close that rstudio
+# and open from the t-e folder
 
 
 # Part 2. Review your changes ---------------------------------------------
