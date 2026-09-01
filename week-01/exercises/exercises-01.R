@@ -30,7 +30,7 @@
 
 
 # 2. What is the difference between commit and push?
-# commit is a local save, push is a global repo save
+# commit is a local save/checkpoint, push is a github repo save
 
 
 # 3. Which repository contains the instructor's original course materials?
@@ -100,7 +100,7 @@
 # Answer the following question:
 #
 # One Git concept I understand better now is:
-
+# how to make and save a file
 
 
 # Save the file again, then repeat:
@@ -127,12 +127,12 @@
 
 # Completion checklist ----------------------------------------------------
 
-# [ ] I completed all questions.
-# [ ] I reviewed my changes using Diff.
-# [ ] I staged the file after reviewing my changes.
-# [ ] I created the first commit.
-# [ ] I pushed the first commit.
-# [ ] I verified the file on GitHub.
-# [ ] I made a second change.
-# [ ] I created and pushed a second commit.
-# [ ] I reopened the existing RStudio Project without cloning it again.
+# [x] I completed all questions.
+# [x] I reviewed my changes using Diff.
+# [x] I staged the file after reviewing my changes.
+# [x] I created the first commit.
+# [x] I pushed the first commit.
+# [x] I verified the file on GitHub.
+# [x] I made a second change.
+# [x] I created and pushed a second commit.
+# [x] I reopened the existing RStudio Project without cloning it again.
