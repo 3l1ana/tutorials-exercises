@@ -11,8 +11,8 @@
 # 5. Do not delete the questions or instructions.
 # 6. Save, commit, and push your completed script.
 #
-# Name:
-# Date:
+# Name: Ellie
+# Date: 9/8/26
 
 
 	#### Part 1: Objects and calculations ####
@@ -21,7 +21,7 @@
 	
 	# 1. Create an object named water_temp_c containing this value.
 
-
+water_temp_c <- 16.8
 
 	# 2. Convert the temperature to Fahrenheit using:
 	#
@@ -29,15 +29,17 @@
 	#
 	#    Save the result as water_temp_f.
 	
-	
+water_temp_f <- 16.8 * (9/5) +32
 	
 	# 3. Print water_temp_c and water_temp_f.
 	
+water_temp_c
+water_temp_f
 	
 	
 	# 4. Round water_temp_f to one decimal place.
 
-
+round(water_temp_f, digits = 1)
 
 	#### Part 2: Vectors and summary functions ####
 	
@@ -49,28 +51,28 @@
 	
 	# 1. The number of fish measured.
 	
-	
+	length(fish_lengths)
 	
 	# 2. The mean fish length.
 	
-	
+	mean(fish_lengths)
 	
 	# 3. The minimum fish length.
 
-
+min(fish_lengths)
 
 	# 4. The maximum fish length.
 	
-	
+	max(fish_lengths)
 	
 	# 5. The number of fish longer than 32 cm.
 	
-	
+	sum(fish_lengths > 32)
 	
 	# 6. Create a vector named fish_over_32 containing only fish
 	#    longer than 32 cm.
 	
-	
+	fish_over_32 <- fish_lengths[fish_lengths > 32]
 	
 	# 7. Convert all fish lengths from centimeters to millimeters
 	#    and save the result as fish_lengths_mm.

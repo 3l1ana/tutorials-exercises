@@ -108,7 +108,13 @@ Calculate each of the following:
 4.  (2\^5).
 
 ```{r}
-# Write your code here
+mean(c(12,18,27))
+
+(22/7) * (4)^2
+
+sqrt(225)
+
+(2^5)
 ```
 
 ## Save your code regularly after you make changes. Now is a good time to do so.
@@ -211,7 +217,15 @@ Create objects containing:
 Use descriptive `snake_case` names.
 
 ```{r}
-# Write your code here
+Name <- "Ellie"
+Year <- 2026
+water_temp <- 14.5
+water_temp_f <- (water_temp * 1.8) + 32
+
+Name
+Year
+water_temp
+water_temp_f
 ```
 
 ## Vectors
@@ -258,6 +272,8 @@ You can subset vectors.
 ### Common summary functions
 
 ```{r}
+fish_lengths <- c(24, 31, 29, 35, 42)
+
 length(fish_lengths)
 
 sum(fish_lengths)
@@ -316,6 +332,7 @@ Create this vector of water temperatures:
 
 ```{r}
 temperatures <- c(8.2, 10.5, 12.1, 9.8, 14.3, 11.6)
+temperatures
 ```
 
 Then calculate:
@@ -327,7 +344,20 @@ Then calculate:
 5.  A vector containing only temperatures greater than 11 °C.
 
 ```{r}
-# Write your code here
+temperatures <- c(8.2, 10.5, 12.1, 9.8, 14.3, 11.6)
+
+length(temperatures)
+
+mean(temperatures)
+
+min(temperatures)
+
+max(temperatures)
+
+sum(temperatures > 11)
+
+temperatures[temperatures > 11]
+
 ```
 
 ## Functions and arguments
@@ -411,7 +441,14 @@ Calculate:
 4.  The number of observed values.
 
 ```{r}
-# Write your code here
+mean(survey_catch, na.rm = TRUE)
+
+sum(survey_catch, na.rm = TRUE)
+
+sum(is.na(survey_catch))
+
+sum(!is.na(survey_catch))
+
 ```
 
 ## Character and logical vectors
@@ -509,7 +546,15 @@ Using `fish_data`:
 4.  Display only cod observations.
 
 ```{r}
-# Write your code here
+
+max(fish_data$length_cm)
+
+sum(fish_data$region == "south")
+
+fish_data[fish_data$length_cm >= 35, ]
+
+fish_data[fish_data$species == "cod", ]
+
 ```
 
 
