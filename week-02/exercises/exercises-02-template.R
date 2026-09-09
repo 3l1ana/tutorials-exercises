@@ -214,7 +214,7 @@ nrow(caught)
 	
 	large_and_caught <- caught & fish_over_35
 	large_and_caught
-	
+	# ask teacher about error and how to fix it
 	
 	
 	#### Reflection ####
