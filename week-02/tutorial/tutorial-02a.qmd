@@ -551,6 +551,8 @@ max(fish_data$length_cm)
 
 sum(fish_data$region == "south")
 
+length(fish_data$region == "south")
+
 fish_data[fish_data$length_cm >= 35, ]
 
 fish_data[fish_data$species == "cod", ]
@@ -711,6 +713,8 @@ above_mean_observations <- survey_data[
 ]
 
 above_mean_observations
+
+nrow(above_mean_observations)
 ```
 
 ### Calculate a summary for selected observations
@@ -744,7 +748,26 @@ Using `survey_data`:
 4. Calculate the mean length of cod, ignoring missing values.
 
 ```{r}
-# Write your code here
+
+north_observations <- survey_data[
+  survey_data$region == "north", 
+]
+north_observations
+
+na_length <- survey_data[
+  is.na(survey_data$length_cm), 
+]
+na_length
+
+caught <- survey_data[
+  !is.na(survey_data$caught), 
+]
+caught
+
+mean_length <- mean(
+  !is.na(survey_data$length_cm), )
+mean_length
+
 ```
 
 ## Reading errors
@@ -835,7 +858,39 @@ Then use R to answer these questions:
 5.  What is the mean length of the fish that were caught?
 
 ```{r}
-# Create survey_data and complete the analysis here
+
+Survey_data <- data.frame(
+  station = c("A", "B", "C", "D", "E"),
+  species = c(
+    "cod", 
+    "haddock", 
+    "cod", 
+    "hake", 
+    "haddock"), 
+  length_cm = c(
+    41,
+    33,
+    38,
+    27,
+    36), 
+  caught = c(
+    TRUE, 
+    TRUE, 
+    FALSE, 
+    TRUE, 
+    TRUE)
+) 
+Survey_data
+
+mean_length <- mean(Survey_data$length_cm)
+mean_length
+
+#?
+length(Survey_data[Survey_data$caught == TRUE, ])
+
+large <- Survey_data$length_cm > mean_length
+large
+
 ```
 
 
