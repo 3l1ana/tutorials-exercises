@@ -235,7 +235,7 @@ nrow(caught)
 	
 	# Before finishing, confirm that:
 	#
-	# [ ] All required code runs without errors.
+	# [x] All required code runs without errors.
 	# [x] Object names are descriptive and use snake_case.
 	# [x] The questions are answered using R code.
 	# [x] The completed .R file is saved.

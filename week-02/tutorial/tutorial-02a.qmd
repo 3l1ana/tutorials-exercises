@@ -885,11 +885,15 @@ Survey_data
 mean_length <- mean(Survey_data$length_cm)
 mean_length
 
-#?
-length(Survey_data[Survey_data$caught == TRUE, ])
+#how many fish were caught
+nrow(Survey_data[Survey_data$caught == TRUE, ])
+
+nrow(Survey_data[Survey_data$species == "cod", ])
 
 large <- Survey_data$length_cm > mean_length
 large
+
+mean(Survey_data$length_cm[Survey_data$caught])
 
 ```
 
