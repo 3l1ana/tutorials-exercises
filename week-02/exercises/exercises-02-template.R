@@ -163,7 +163,7 @@ nrow(caught)
 	# 4. Display all observations from fish at least 35 cm long.
 	
 	fish_over_35 <- survey_data[survey_data$length_cm >= 35, ]
-	fish_over_35
+	fish_over_35[-length(fish_over_35),]
 	
 	# 5. Display only the observations where a fish was caught.
 	
