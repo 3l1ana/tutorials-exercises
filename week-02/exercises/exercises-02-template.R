@@ -208,12 +208,17 @@ nrow(caught)
 	# Then use large_and_caught to display the matching rows
 	# of survey_data.
 	
-	rows <- nrow(fish_over_35)
-	fish_over_35[rows+1, ] <- NA
-	fish_over_35
+	#rows <- nrow(fish_over_35)
+	#fish_over_35[rows+1, ] <- NA
+	#fish_over_35
 	
-	large_and_caught <- caught & fish_over_35
+	#large_and_caught <- caught & fish_over_35
+	large_and_caught <- survey_data$length_cm >= 35 &
+	  survey_data$caught
 	large_and_caught
+	
+	survey_data[large_and_caught, ]
+	
 	# ask teacher about error and how to fix it
 	
 	
