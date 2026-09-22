@@ -213,9 +213,9 @@ Complete the code so the year columns become a variable named `survey_year` and 
 ```r
 biomass_wide |>
   pivot_longer(
-    cols = ____________________,
-    names_to = ____________________,
-    values_to = ____________________
+    cols = starts with("20"),
+    names_to = "survey_year",
+    values_to = "biomass"
   )
 ```
 
@@ -238,21 +238,21 @@ The Lord of the Rings data record the number of words spoken by characters of di
 
 What is the file path one would need to use to import these files if they are in the data subfolder of the tutorials subfolder of week-03? 
 
-```r
+
 	file_path <- here(
-		_______,
-		_______,
-		_______,
-		_______,
+		"week-03",
+		"tutorials",
+		"tutorial-03",
+		"data",
 		"The_Fellowship_Of_The_Ring.csv"
 )
-```
+
 
 ::: {.callout-tip collapse="true"}
 ## Solution
 
 ```{r}
-	data_file_path <- here(
+	data_file_path_fellowship <- here(
 		"week-03",
 		"tutorials",
 		"tutorial-03",
@@ -268,7 +268,7 @@ The `file.path` function constructs a path to a file.
 
 ? file.path()
 
-LOTR_file_path <- file.path(data_file_path, "The_Fellowship_Of_The_Ring.csv")
+LOTR_file_path <- file.path(data_file_path_fellowship, "The_Fellowship_Of_The_Ring.csv")
 
 LOTR_file_path
 ```
@@ -279,19 +279,19 @@ Now that you know about creating file paths, let's read in out datasets. Because
 
 ```{r}
 fellowship <- read_csv(
-	file.path(data_file_path,
+	file.path(data_file_path_fellowship,
 	"The_Fellowship_Of_The_Ring.csv"),
   show_col_types = FALSE
 )
 
 two_towers <- read_csv(
-	file.path(data_file_path,
+	file.path(data_file_path_fellowship,
   "The_Two_Towers.csv"),
   show_col_types = FALSE
 )
 
 return_king <- read_csv(
-	file.path(data_file_path,
+	file.path(data_file_path_fellowship,
   "The_Return_Of_The_King.csv"),
   show_col_types = FALSE
 )
@@ -377,7 +377,7 @@ The tuberculosis dataset records confirmed cases by country, year, sex, and age 
 ```{r}
 tb <- read_csv(
 	file.path(
-		data_file_path,
+		data_file_path_fellowship,
   	"tb.csv"),
   show_col_types = FALSE
 )
@@ -547,7 +547,7 @@ Use `write_csv()` from the `{readr}` package to save a data frame as a CSV file.
 ```{r}
 # create a path for the output file
 output_file <- file.path(
-  data_file_path,
+  data_file_path_fellowship,
   "lotr_tidy.csv"
 )
 
