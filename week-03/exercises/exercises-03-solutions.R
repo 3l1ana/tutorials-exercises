@@ -14,8 +14,7 @@
 	data_file_path <- here(
 	  "week-03",
 	  "exercises",
-	  "data"
-	)
+	  "data")
 	
 	# Import both files.
 	# In these files, a period (.) represents a missing value.
@@ -23,8 +22,7 @@
 	upper_bay <- read_csv(
 	  file.path(
 	    data_file_path,
-	    "upper-bay-fish-counts.csv"
-	  ),
+	    "upper-bay-fish-counts.csv"),
 	  na = c("", "NA", "."),
 	  show_col_types = FALSE #optional to suppress extra info
 	)
@@ -32,8 +30,7 @@
 	lower_bay <- read_csv(
 	  file.path(
 	    data_file_path,
-	    "lower-bay-fish-counts.csv"
-	  ),
+	    "lower-bay-fish-counts.csv"),
 	  na = c("", "NA", "."),
 	  show_col_types = FALSE
 	)
@@ -226,7 +223,7 @@
 
 
 	# -------------------------------------------------------------------------
-	# Optional challenge: Create a small data frame by hand
+	# Create a small data frame by hand
 	# -------------------------------------------------------------------------
 	
 	# Use tribble() to create a data frame named species_key containing:

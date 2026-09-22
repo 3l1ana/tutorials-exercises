@@ -230,7 +230,7 @@
 	
 	
 	# -------------------------------------------------------------------------
-	# Optional challenge: Create a small data frame by hand
+	# Create a small data frame by hand
 	# -------------------------------------------------------------------------
 	
 	# Use tribble() to create a data frame named species_key containing:
