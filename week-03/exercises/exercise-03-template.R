@@ -175,7 +175,7 @@
 	  mutate(
 	    species = recode(
 	      species,
-	      cod = "atlantic cod",
+	      cod = "atlantic_cod",
 	      had = "haddock",
 	      pol = "pollock"
 	    ),
