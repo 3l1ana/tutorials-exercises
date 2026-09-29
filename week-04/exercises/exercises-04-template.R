@@ -70,20 +70,25 @@ nrow(efficient_cars)
 	# Hint: Both conditions must be true.
 	
 mpg |> 
-  filter()
+  filter(class == "suv" & year == 2008)
 
 	# 3. Filter mpg to include vehicles that:
 	# - have 6 cylinders OR
 	# - get more than 25 mpg on the highway.
 	# Save the result as new_dat.
 	
+new_dat <- mpg |>
+  filter(cyl == 6 | hwy > 25)
+new_dat
 
 	#4. Filter mpg to include vehicles made by Toyota, Honda,
 	# or Subaru.
 	#
 	# Hint: %in% may be useful here.
 	
-	
+
+	mpg |>
+	  filter(manufacturer %in% c("toyota", "honda", "subaru"))
 	
 	# ============================================================
 	# Part 2: select()
@@ -92,6 +97,8 @@ mpg |>
 	# 5. Create a smaller dataset called mpg_small containing only:
 	# manufacturer, model, class, displ, cty, hwy
 	
+	mpg |>
+	  select(manufacturer, model, displ, cty, hwy)
 
 	# 6. Starting with mpg, select:
 	# - manufacturer
@@ -100,13 +107,16 @@ mpg |>
 	
 	# Do this using : rather than writing every variable name.
 	
+	mpg |>
+	  select(manufacturer, model, cty : hwy)
 
 	# 7. Starting with mpg, select manufacturer, model, and all
 	# variables whose names end in "y".
 	#
 	# Hint: use a selection helper.
 	
-
+mpg |>
+  select(manufacturer, model, ends_with("y"))
 	
 	# ============================================================
 	# Part 3: relocate() and rename()
@@ -118,6 +128,9 @@ mpg |>
 	# Do not manually re-select every column; use relocate().
 	# Save the result back to mpg_small.
 	
+mpg_small <- mpg |>
+  relocate(class, .after = manufacturer)
+mpg_small
 
 	# 9. Starting with mpg_small, rename:
 	# cty -> city_mpg
@@ -125,13 +138,18 @@ mpg |>
 	
 	# Save the result as mpg_named.
 	
+mpg_named <- mpg_small |>
+  rename(city_mpg = cty) |>
+  rename(highway_mpg = hwy)
+mpg_named
 
 	# 10. Starting with mpg, use rename_with() to convert the names
 	# of all variables ending in "y" to uppercase.
 	#
 	# Do not change the values in the columns.
 	
-
+mpg |>
+  rename_with(toupper, ends_with("y"))
 	
 	# ============================================================
 	# Part 4: mutate()
@@ -143,6 +161,10 @@ mpg |>
 	#
 	# Save the result as mpg_mutated.
 	
+mpg_mutated <- mpg_named |>
+  mutate(mpg_difference = highway_mpg - city_mpg)
+mpg_mutated
+glimpse(mpg_mutated)
 
 	# 12. Engine displacement is currently in liters.
 	# Starting with mpg_mutated, create a new variable called
@@ -153,7 +175,9 @@ mpg |>
 	
 	# Save the result back to mpg_mutated.
 	
-
+mpg_mutated <- mpg_mutated |>
+  mutate(engine_size_cm3 = displ*1000)
+glimpse(mpg_mutated)
 	# ============================================================
 	# Part 5: summarise()
 	# ============================================================
@@ -162,6 +186,8 @@ mpg |>
 	#
 	# Name the resulting variable mean_hwy_mpg.
 	
+mpg |>
+  summarise(mean_hwy_mpg = mean(hwy))
 
 	# 14. Using mpg, calculate:
 	# - mean highway mpg
@@ -171,7 +197,12 @@ mpg |>
 	#
 	# Give each summary a descriptive name.
 	
-
+mpg |> 
+  summarise(
+    mean_hwy_mpg = mean(hwy),
+    standard_dev_hwy_mpg = sd(hwy),
+    min_hwy_mpg = min(hwy), 
+    max_hwy_mpg = max(hwy))
 
 	# ============================================================
 	# Part 6: group_by() + summarise()
@@ -182,6 +213,9 @@ mpg |>
 	# Your output should have one row per vehicle class.
 	# Name the summary variable mean_hwy_mpg.
 	
+mpg |>
+  group_by(class) |>
+  summarise(mean_hwy_mpg = mean(hwy), na.rm = TRUE, .groups = "drop")
 	
 	# 16. For each vehicle class, calculate:
 	# - mean city mpg
@@ -190,6 +224,13 @@ mpg |>
 	#
 	# Use .groups = "drop" so the resulting data frame is ungrouped.
 	
+mpg |>
+  group_by(class) |>
+  summarise(mean_city_mpg = mean(cty),
+            mean_hwy_mpg = mean(hwy), 
+            standard_dev_hwy_mpg = sd(hwy),
+            .groups = "drop"
+            )
 
 	
 	# 17. For vehicles made in 2008 only, calculate the minimum
@@ -200,7 +241,13 @@ mpg |>
 	# group_by()
 	# summarise()
 	
-
+mpg |> 
+  filter(year == 2008) |>
+  group_by(class) |>
+  summarise(
+    min_hwy_mpg_2008 = min(hwy), 
+    max_hwy_mpg_2008 = max(hwy)
+  )
 	
 	
 	# ============================================================
@@ -220,8 +267,18 @@ mpg |>
 	# mean_highway_mpg and mean_efficiency_gain
 	#
 	# Save the final table as class_summary_2008.
-	
 
+class_summary_2008 <-	
+  mpg |>
+    filter(year == 2008) |>
+    select(manufacturer, model, class, cty, hwy) |>
+    mutate(efficiency_gain = hwy - cty) |>
+    group_by(class) |>
+    summarise(
+      mean_highway_mpg = mean(hwy), 
+      mean_efficiency_gain = mean(efficiency_gain)
+      )
+class_summary_2008
 	
 	# ------------------------------------------------------------
 	# Final check

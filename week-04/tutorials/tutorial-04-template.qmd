@@ -230,7 +230,8 @@ penguins |>
 Keep Gentoo penguins with bill depth greater than or equal to 15.5 mm.
 
 ```{r}
-# Write your code here
+penguins |> 
+  filter(species == "Gentoo" & bill_depth_mm >= 15.5)
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -247,7 +248,8 @@ penguins |>
 Keep penguins that are Gentoo **or** have body mass greater than 4500 g.
 
 ```{r}
-# Write your code here
+penguins |>
+  filter(species == "Gentoo" | body_mass_g > 4500)
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -593,6 +595,8 @@ If the name on the left side of `=` already exists, `mutate()` replaces that var
 ```{r}
 penguins |>
   mutate(island = as.character(island))
+
+?as.character
 ```
 
 ::: callout-warning
@@ -609,6 +613,9 @@ penguins |>
       "Torgersen", "Biscoe", "Dream"
     )
   )
+
+?forcats
+
 ```
 
 ## Practice: `mutate()`
@@ -618,7 +625,8 @@ penguins |>
 Create `year_fct`, containing `year` converted to a factor.
 
 ```{r}
-# Write your code here
+penguins |>
+  mutate(year_fct = as.factor(year))
 ```
 
 ::: {.callout-tip collapse="true"}
@@ -747,7 +755,11 @@ Hint: in one pipeline, you will need to:
 4.  Calculate the mean bill ratio for each species and call it `bill_ratio_mean`.
 
 ```{r}
-# Write your code here
+penguins |>
+  mutate(bill_ratio = bill_length_mm/bill_depth_mm) |>
+  select(species, bill_ratio) |>
+  group_by(species) |>
+  summarise(bill_ratio_mean = mean(bill_ratio, na.rm = TRUE))
 ```
 
 ::: {.callout-tip collapse="true"}
