@@ -223,14 +223,4 @@
 	# Note that `color` is a column in this dataset: using it in a facet formula 
 	# splits the data by diamond color grade.
 	
-	# Which layout is easier to read: the five panels from Exercise 4 or this larger grid?
-	# Explain your choice in one sentence.
-	
-	# Write your code here:
-	
-	
-
-	# Write your answer here:
-	# The larger grid contains 35 panels and can be crowded on a small screen. 
-	# Either preference is acceptable with an explanation.
-	
+	# Which layout is easier to read: 
