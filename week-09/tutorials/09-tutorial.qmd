@@ -1,0 +1,788 @@
+---
+title: "Generalized additive models in R"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+    code-copy: true
+    theme: cosmo
+execute:
+  echo: true
+  warning: true
+  message: false
+---
+
+We will use `{mgcv}` to fit GAMs, `{gratia}` to inspect and visualize them, and `{ggplot2}` to customize plots. `{mgcv}` includes several fitting functions:
+
+- `gam()` fits generalized additive models.
+- `bam()` fits GAMs efficiently to large datasets.
+- `gamm()` fits generalized additive mixed models, including random effects and certain residual correlation structures.
+
+`gam()` and `bam()` can also include random effects.
+
+Another package, `{gamm4}`, fits GAMMs using `{lme4}`.
+
+Install the packages below if needed. You only need to install them once.
+
+```{r}
+#| label: install-packages
+#| eval: false
+install.packages(c("mgcv", "gratia", "tidyverse", "broom"))
+```
+
+Load the packages for this session.
+
+```{r}
+#| label: packages
+library(mgcv)
+library(gratia)
+library(tidyverse)
+library(broom)
+
+theme_set(theme_bw(base_size = 12))
+
+ink <- "#0072B2"
+```
+
+**Learning objectives:** by the end, you should be able to:
+
+- Explain why a GAM can capture a curved relationship.
+- Fit a model containing smooth and categorical effects.
+- Distinguish basis dimension from smoothness.
+- Interpret smooth plots and generate predictions with uncertainty.
+- Identify basic diagnostic problems.
+
+## 1. Prepare data and identify the problem
+
+### Our question
+
+How is juvenile fish growth associated with water temperature, and how does this relationship change after accounting for initial body length and habitat?
+
+We will begin with temperature alone and add the other predictors later. We will use simulated observations from independent fish sampled across a temperature gradient. These are teaching data, not measurements from a real species.
+
+| Variable | Meaning | Units or levels |
+|----|----|----|
+| `growth` | Growth over a standardized observation period | mm/month |
+| `temperature` | Mean water temperature during that period | °C |
+| `length_cm` | Initial fish length | cm |
+| `habitat` | Habitat category | Seagrass, Sand |
+
+The simulation gives temperature a curved effect, length a linear effect, and habitat an additive difference.
+
+```{r}
+# Set the seed so we all generate the same data
+set.seed(316)
+
+# Number of observations
+n <- 240
+
+# Create a data frame with three predictors
+fish <- data.frame(
+  temperature = runif(n, 6, 24),
+  length_cm = runif(n, 15, 45),
+  habitat = factor(
+    sample(c("Seagrass", "Sand"), n, replace = TRUE),
+    levels = c("Seagrass", "Sand")
+  )
+)
+
+# Add simulated growth rates
+fish$growth <- 5 +
+  6 * exp(-((fish$temperature - 16) / 4)^2) +
+  0.05 * (fish$length_cm - 30) +
+  ifelse(fish$habitat == "Sand", -1.2, 0) +
+  rnorm(n, mean = 0, sd = 0.8)
+
+# Look at the first six rows
+head(fish)
+
+# Summary statistics
+summary(fish)
+
+# Check for missing values
+colSums(is.na(fish))
+```
+
+### Explore the data
+
+The first step when working with new data is to make preliminary plots. Let's start with a scatterplot.
+
+```{r}
+ggplot(fish, aes(x = temperature, y = growth)) +
+  geom_point(alpha = 0.4) +
+  labs(
+    x = "Water temperature (°C)",
+    y = "Growth (mm/month)"
+  )
+```
+
+The plot suggests a nonlinear relationship: growth generally increases toward intermediate temperatures and then decreases at warmer temperatures.
+
+### Fit a linear model
+
+Let's see what happens if we fit a linear model.
+
+```{r}
+m_lm <- lm(growth ~ temperature, data = fish)
+
+summary(m_lm)
+```
+
+Generate predictions at a sequence of temperatures within the observed range. We will use this same prediction grid when plotting the GAM.
+
+```{r}
+new_dat <- tibble(
+  temperature = seq(
+    min(fish$temperature),
+    max(fish$temperature),
+    length.out = 200
+  )
+)
+
+# Predicted mean growth and 95% confidence intervals
+preds_lm <- augment(
+  m_lm,
+  newdata = new_dat,
+  interval = "confidence",
+  conf.level = 0.95
+)
+
+head(preds_lm)
+```
+
+`augment()` returns the predicted mean in `.fitted` and the lower and upper confidence limits in `.lower` and `.upper`.
+
+```{r}
+ggplot(fish, aes(x = temperature, y = growth)) +
+  geom_ribbon(
+    data = preds_lm,
+    aes(
+      x = temperature,
+      ymin = .lower,
+      ymax = .upper
+    ),
+    inherit.aes = FALSE,
+    fill = ink,
+    alpha = 0.2
+  ) +
+  geom_point(alpha = 0.4) +
+  geom_line(
+    data = preds_lm,
+    aes(y = .fitted),
+    colour = ink,
+    linewidth = 1
+  ) +
+  labs(
+    x = "Water temperature (°C)",
+    y = "Growth (mm/month)"
+  )
+```
+
+The linear model estimates a small positive slope. However, this single slope does not capture the curved pattern in the data. The ribbon represents uncertainty in the fitted mean under the linear model; it does not establish that the model describes the relationship appropriately.
+
+Let's examine the residual plots.
+
+```{r}
+plot(m_lm)
+```
+
+The residual-versus-fitted plot shows a systematic pattern: residuals increase and then decrease rather than varying randomly around zero.
+
+Our linear model estimates a constant change in mean growth for each degree of warming. An increase followed by a decrease cannot be summarized well by one slope. A GAM allows us to estimate this curved relationship.
+
+## 2. Fit and understand a first GAM
+
+For a Gaussian response with an identity link, the equation for a one-predictor GAM is:
+
+$$
+\text{growth}_i =
+\beta_0 +
+f(\text{temperature}_i) +
+\epsilon_i.
+$$
+
+Here, $f$ is a smooth function estimated from the data. We assume independent, normally distributed errors with constant variance.
+
+A GAM is still a regression model; it allows selected predictor effects to take a flexible shape. Other response distributions and link functions are possible, but we will begin with a Gaussian response and an identity link.
+
+### Fit the model
+
+Fitting a GAM is similar to fitting a linear model: we use `gam()` instead of `lm()` and add `s()` for predictors whose effects we want to estimate as smooth functions.
+
+The argument `k` sets the basis dimension—the number of basis functions available to represent the smooth. This limits its potential complexity. The smoothing penalty controls how much of that flexibility the model uses. We will examine these ideas more closely in Section 3.
+
+```{r}
+m_gam <- gam(
+  growth ~ s(temperature, k = 12),
+  data = fish,
+  method = "REML"
+)
+
+summary(m_gam)
+```
+
+In this model:
+
+- `s(temperature)` estimates a smooth temperature effect.
+- `k = 12` sets the basis dimension. It does not request 12 bends or 12 effective degrees of freedom.
+- `method = "REML"` estimates the smoothing parameter using restricted maximum likelihood.
+- With no `family` specified, `gam()` uses a Gaussian response with an identity link.
+
+### Interpret the summary
+
+The GAM summary begins by showing the response distribution, link function, and model formula.
+
+The **parametric coefficients** describe the intercept and any linear or categorical predictor effects. A GAM can combine these effects with smooths. Here, we only have an intercept, representing baseline growth. The temperature smooth adds to or subtracts from this baseline to predict growth at each temperature.
+
+The **approximate significance of the smooth terms** summarizes each smooth's complexity and tests whether it contributes to explaining the response:
+
+- **`edf` (effective degrees of freedom):** describes the fitted smooth's complexity. An edf near 1 indicates an approximately straight relationship (and if this is the case for a smooth, revert to linear effect); larger values allow more curvature.
+- **`Ref.df` (reference degrees of freedom):** degrees of freedom used in the approximate significance test.
+- **`F`:** the test statistic for the smooth. Larger values generally provide stronger evidence of an association.
+- **`p-value`:** measures evidence against the hypothesis that the entire smooth is zero. It does not specifically test whether the relationship is nonlinear.
+
+Our temperature smooth has an `edf` of approximately 8.28, indicating a curved relationship, and a very small p-value, providing strong evidence of an association between temperature and growth.
+
+At the bottom of the summary, **deviance explained** is approximately 78.5%. For this Gaussian identity-link model, this corresponds to the proportion of variation explained by the model. **Adjusted R-squared** also accounts for model complexity.
+
+These summaries describe model fit, but we need to plot the fitted relationship to understand its shape.
+
+### Predict and compare the fitted relationships
+
+We will use `fitted_values()` from `{gratia}` to generate predictions at the temperatures in `new_dat`.
+
+This function can return predictions on different scales (response or link). We will just focus on `scale = "response"` , which returns predictions in the original response units—here, growth in mm/month.
+
+```{r}
+preds_gam <- fitted_values(
+  m_gam,
+  data = new_dat,
+  scale = "response"
+)
+
+head(preds_gam)
+```
+
+The predictions are stored in `.fitted`. The output also includes uncertainty estimates, which we will use later.
+
+Let's compare the GAM and linear model on the same plot. We will omit uncertainty ribbons here to focus on the shapes of the fitted relationships.
+
+```{r}
+ggplot(fish, aes(x = temperature, y = growth)) +
+  geom_point(alpha = 0.4) +
+  geom_line(
+    data = preds_lm,
+    aes(
+      y = .fitted,
+      linetype = "Linear regression"
+    ),
+    colour = "grey45",
+    linewidth = 1
+  ) +
+  geom_line(
+    data = preds_gam,
+    aes(
+      y = .fitted,
+      linetype = "GAM"
+    ),
+    colour = ink,
+    linewidth = 1
+  ) +
+  scale_linetype_manual(
+    values = c(
+      "Linear regression" = "dashed",
+      "GAM" = "solid"
+    )
+  ) +
+  labs(
+    x = "Water temperature (°C)",
+    y = "Growth (mm/month)",
+    linetype = NULL
+  )
+```
+
+The GAM captures the curved relationship: predicted growth increases toward a peak around 16°C, then declines at warmer temperatures. The linear model estimates a small, constant increase in growth with temperature and misses this pattern.
+
+This illustrates how a weak linear trend can conceal a strong nonlinear relationship.
+
+### Check whether `k` provides enough flexibility
+
+We started with `k = 12`. Now we will check whether this provides enough flexibility using `k.check()`.
+
+```{r}
+set.seed(123)
+mgcv::k.check(m_gam)
+```
+
+A low `k-index` and small `p-value` are warning signs, especially when `edf` is close to `k'`, the maximum available `edf`. These results suggest that residual pattern remains that could reflect insufficient flexibility.
+
+Read the columns as follows:
+
+- **`k'`:** the maximum available `edf` after constraints. For this smooth with `k = 12`, it is 11.
+- **`edf`:** the complexity used by the fitted smooth, approximately 8.28 here.
+- **`k-index`:** values below 1 suggest residual pattern that could reflect insufficient flexibility.
+- **`p-value`:** a small value provides evidence of that residual pattern. It does not establish that `k` is too small, because other model problems can also cause residual structure.
+
+The `p-value` is simulation-based and can vary between runs. A value around 0.05 is a borderline warning rather than a definitive failure.
+
+We can investigate by increasing `k`, refitting the model, and checking whether the estimated curve and diagnostics change appreciably.
+
+```{r}
+# Refit with a larger basis dimension
+m_gam24 <- gam(
+  growth ~ s(temperature, k = 24),
+  data = fish,
+  method = "REML"
+)
+
+# Compare basis-dimension checks
+set.seed(123)
+mgcv::k.check(m_gam)
+
+set.seed(123)
+mgcv::k.check(m_gam24)
+
+# Compare effective degrees of freedom
+summary(m_gam)$s.table
+summary(m_gam24)$s.table
+```
+
+Compare predictions from both models at the same temperatures.
+
+```{r}
+preds_k <- bind_rows(
+  fitted_values(
+    m_gam,
+    data = new_dat,
+    scale = "response"
+  ) |>
+    mutate(model = "k = 12"),
+
+  fitted_values(
+    m_gam24,
+    data = new_dat,
+    scale = "response"
+  ) |>
+    mutate(model = "k = 24")
+)
+
+ggplot(
+  preds_k,
+  aes(
+    x = temperature,
+    y = .fitted,
+    linetype = model
+  )
+) +
+  geom_line(
+    colour = ink,
+    linewidth = 1
+  ) +
+  labs(
+    x = "Water temperature (°C)",
+    y = "Predicted growth (mm/month)",
+    linetype = NULL
+  )
+```
+
+Increasing `k` from 12 to 24 produces almost identical predictions, suggesting that the original basis dimension was adequate to capture the temperature relationship.
+
+We can also compare AIC values:
+
+```{r}
+AIC(m_gam, m_gam24)
+```
+
+Lower AIC indicates better support after accounting for model complexity. A small difference provides little basis for preferring one model. Use this comparison alongside the basis checks and fitted curves.
+
+We will retain the model with the smaller basis dimension (`k = 12`) for subsequent predictions because increasing `k` did not appreciably change the fitted relationship.
+
+## 3. Basis functions, penalties, and `k`
+
+### How can a model estimate a curve?
+
+We have fitted a flexible curve and checked its basis dimension. Now let's examine how that curve is constructed.
+
+A smooth can be represented as a weighted sum of simpler functions:
+
+$$
+f(x) = \sum_{j=1}^{K} b_j(x)\beta_j.
+$$
+
+The $b_j(x)$ are **basis functions**: building blocks whose estimated weights, $\beta_j$, determine the fitted curve. The collection of basis functions is called a **basis**.
+
+A smooth is the curve we estimate by adding together these weighted basis functions.
+
+`basis()` from `{gratia}` extracts the basis functions used by our fitted smooth, and `draw()` displays them.
+
+```{r}
+temperature_basis <- basis(
+  m_gam,
+  select = "s(temperature)"
+)
+
+draw(temperature_basis)
+```
+
+The plot shows individual basis functions, not their fitted weighted sum. These functions are mathematical building blocks, not separate biological relationships.
+
+The colors in this illustration distinguish the basis functions.
+
+Our default `s()` uses a thin-plate regression spline basis. Other spline bases provide different building blocks. We will learn more in the exercises when we complete part of [Noam Ross’s GAM course](https://noamross.github.io/gams-in-r-course/). For details about the spline types available in `{mgcv}`, see the [smooth terms documentation](https://stat.ethz.ch/R-manual/R-devel/library/mgcv/html/smooth.terms.html).
+
+### Enough flexibility, but a penalty for unnecessary wiggles
+
+A flexible curve could follow small fluctuations in the observations rather than the underlying relationship. To limit this, the model uses a **smoothing penalty**.
+
+For our GAM, fitting balances two objectives:
+
+- Fit the observations closely.
+- Avoid unnecessary wiggles in the curve.
+
+The **smoothing parameter**, $\lambda$, controls the strength of the penalty. A larger value imposes a stronger penalty and generally produces a smoother curve. A smaller value allows more wiggles.
+
+In our model, restricted maximum likelihood (REML) estimates the smoothing parameter rather than asking us to choose it by eye. Maximum likelihood (ML) estimates model parameters by finding the values that make the observed data most likely under the model. Restricted maximum likelihood (REML) modifies this approach to account for estimating the model’s fixed effects. In a GAM, either method can estimate smoothing parameters; REML is commonly preferred because it tends to provide more stable smoothness estimates.
+
+Remember the distinction:
+
+- **`k` sets the available flexibility** by specifying the basis dimension.
+- **The smoothing penalty controls how much of that flexibility is used.**
+
+Increasing `k` does not automatically make the fitted curve wigglier.
+
+### Compare different smoothing penalties
+
+Let's hold the basis dimension fixed and deliberately vary the smoothing parameter using `sp`.
+
+The numerical `sp` values below are specific to this demonstration; they are not recommended defaults.
+
+```{r}
+# Weak penalty
+m_weak <- gam(
+  growth ~ s(temperature, k = 30),
+  data = fish,
+  method = "REML",
+  sp = 0.00001
+)
+
+# Automatically estimated penalty
+m_auto <- gam(
+  growth ~ s(temperature, k = 30),
+  data = fish,
+  method = "REML"
+)
+
+# Strong penalty
+m_strong <- gam(
+  growth ~ s(temperature, k = 30),
+  data = fish,
+  method = "REML",
+  sp = 10000
+)
+```
+
+All three models have the same basis dimension. For `m_weak` and `m_strong`, we fix the smoothing parameter ourselves. For `m_auto`, REML estimates it.
+
+Generate predictions from each model at the same temperatures.
+
+```{r}
+penalty_fits <- bind_rows(
+  fitted_values(
+    m_weak,
+    data = new_dat,
+    scale = "response"
+  ) |>
+    mutate(penalty = "Weak penalty"),
+
+  fitted_values(
+    m_auto,
+    data = new_dat,
+    scale = "response"
+  ) |>
+    mutate(penalty = "REML-selected penalty"),
+
+  fitted_values(
+    m_strong,
+    data = new_dat,
+    scale = "response"
+  ) |>
+    mutate(penalty = "Strong penalty")
+)
+```
+
+Plot the fitted relationships.
+
+```{r}
+ggplot(fish, aes(x = temperature, y = growth)) +
+  geom_point(alpha = 0.4) +
+  geom_line(
+    data = penalty_fits,
+    aes(
+      y = .fitted,
+      linetype = penalty
+    ),
+    colour = ink,
+    linewidth = 0.9
+  ) +
+  scale_linetype_manual(
+    values = c(
+      "Weak penalty" = "dotted",
+      "REML-selected penalty" = "solid",
+      "Strong penalty" = "dashed"
+    )
+  ) +
+  labs(
+    x = "Water temperature (°C)",
+    y = "Growth (mm/month)",
+    linetype = NULL
+  )
+```
+
+The weak penalty allows the model to follow more local variation. This does not mean every bend represents a real biological feature. The strong penalty can make the curve too smooth to capture the temperature relationship.
+
+For routine fitting, we omit `sp`, let REML estimate the smoothing parameter, and then check the fitted model.
+
+## 4. Add numeric and categorical predictors
+
+Now that we have a background in GAMs, we will go back to our question (how is juvenile fish growth associated with water temperature, and how does this relationship change after accounting for initial body length and habitat?) and fit a model to address it using all three predictors:
+
+$$\text{growth}_i = \beta_0 + f(\text{temperature}_i) + \beta_L\text{length}_{c,i} + \beta_H I(\text{Sand}_i) + \epsilon_i.$$
+
+For this, we will center length at 30 cm, a meaningful value within the data. We will include a linear length effect here to illustrate how we include a linear effect (versus a smooth) in a GAM that has other predictors.
+
+```{r}
+
+fish$length_c <- fish$length_cm - 30
+
+m_full <- gam(growth ~ s(temperature, k = 12) + length_c + habitat,
+              data = fish, method = "REML")
+
+summary(m_full)
+```
+
+We now have two more variables in the parametric coefficient table:
+
+- `length_c` is the estimated change in mean growth, in mm/month, for a 1 cm increase in initial length, holding temperature and habitat constant.
+- `habitatSand` is the estimated difference in mean growth between Sand and Seagrass, holding temperature and length constant. Seagrass is the reference level because we set the factor levels explicitly.
+- The intercept applies to a 30 cm fish in Seagrass where the centered temperature smooth contributes zero. It is not automatically growth at 0 degrees C or at the mean temperature.
+
+The model is **additive**: the same temperature curve applies in each habitat, and the habitat coefficient shifts that curve vertically. We have not fitted a temperature-by-habitat interaction.
+
+We now use `draw()` from `{gratia}` to plot the temperature effect after accounting for length and habitat in m_full. - `select = "s(temperature)"` selects the temperature smooth. - `smooth_col = ink, ci_col` = ink sets the curve and uncertainty ribbon colors. - `overall_uncertainty` = FALSE excludes uncertainty in the overall mean/intercept from the ribbon. - `rug = TRUE` adds ticks showing the observed temperatures.
+
+The y-axis shows how much the temperature smooth adds to or subtracts from predicted growth, in mm/month. For example, a value of +2 means the temperature term adds 2 mm/month to the prediction. The intercept, length, and habitat terms supply the remaining parts.
+
+This differs from `fitted_values()`, which combines all model terms to predict total growth for specified temperatures, lengths, and habitats.
+
+```{r}
+draw(m_full, select = "s(temperature)",
+     smooth_col = ink, ci_col = ink,
+     overall_uncertainty = FALSE, rug = TRUE)
+```
+
+### A second smooth
+
+Length may have a nonlinear relationship with growth and we can estimate that too:
+
+```{r}
+
+m_two <- gam(growth ~ s(temperature, k = 12) +
+               s(length_cm, k = 8) + habitat,
+             data = fish, method = "REML")
+
+summary(m_two)
+
+draw(m_two, select = c("s(temperature)", "s(length_cm)"),
+     smooth_col = ink, ci_col = ink,
+     overall_uncertainty = FALSE, ncol = 2)
+```
+
+Note that the `edf` for `s(length_cm)` is 1.00. This means this effect is linear, even though we are allowing it to be wiggly. We can revert to our original model that specifies length as a linear effect.
+
+## 5. Predict and visualize uncertainty
+
+A smooth plot isolates a model component. To obtain predicted growth in mm/month for particular fish, use the full model and a prediction grid containing every predictor the model needs.
+
+We will create new temperature data for both habitats at an initial fish length of 30 cm. Because `m_full` uses `length_c`, the prediction grid must contain that column.
+
+```{r}
+new_dat <- expand.grid(
+  temperature = seq(6, 24, length.out = 200),
+  length_c = 0,
+  habitat = levels(fish$habitat)
+)
+
+new_dat$habitat <- factor(new_dat$habitat, levels = levels(fish$habitat))
+
+pred_fish <- fitted_values(m_full, data = new_dat,
+                          scale = "response", ci_level = 0.95,
+                          unconditional = TRUE)
+head(pred_fish)
+```
+
+`fitted_values()` returns the predictor values plus `.fitted`, `.se`, `.lower_ci`, and `.upper_ci`. The leading dots are part of the column names.
+
+`scale = "response"` requests predicted growth in mm/month. For our Gaussian identity-link model, the response and link scales coincide.
+
+The ribbon shows approximate 95% uncertainty intervals for mean growth at each temperature, holding length and habitat at the specified values. It describes uncertainty in the estimated mean, rather than the variation expected among individual fish.
+
+We use unconditional = TRUE to also account for uncertainty in the estimated smoothing parameter.
+
+```{r}
+ggplot(pred_fish, aes(x = temperature, y = .fitted)) +
+  geom_ribbon(aes(ymin = .lower_ci, ymax = .upper_ci),
+              fill = ink, alpha = 0.18) +
+  geom_line(colour = ink, linewidth = 1) +
+  geom_rug(data = fish, aes(x = temperature),
+           inherit.aes = FALSE, alpha = 0.3) +
+  facet_wrap(~ habitat) +
+  labs(x = "Water temperature (°C)",
+       y = "Predicted growth (mm/month)",
+       subtitle = "Initial fish length held at 30 cm")
+```
+
+We have intentionally omitted raw observations from this plot: predictions condition on length = 30 cm, whereas observed fish have different lengths. The panels share the same y-axis limits so the habitat difference can be compared directly.
+
+## 6. Check the model and revisit `k`
+
+### Diagnose the fitted model
+
+Before interpreting our results, we need to check whether the model adequately describes the data. We will use appraise() from {gratia} to generate diagnostic plots, with type = "deviance" requesting deviance residuals. For our Gaussian model, these are equivalent to the usual observed-minus-predicted residuals.
+
+For this Gaussian model, inspect the residual Q-Q plot for major departures from normal errors and the residual-versus-fitted plot for remaining patterns or changing variance. The observed-versus-fitted plot describes agreement but is not sufficient by itself. `appraise()` supplies diagnostic plots; it does not replace checks of basis dimension or optimizer status. Here `converged` reports the fitting convergence flag and `outer.info$conv` reports the outer optimizer status for this REML fit. Convergence does not imply that the model is appropriate.
+
+```{r}
+set.seed(316)
+appraise(m_full, type = "deviance")
+```
+
+Check residuals against temperature directly. A model can miss a predictor pattern even if the residual-versus-fitted plot is not obviously alarming.
+
+```{r}
+residual_data <- fish
+residual_data$residual <- residuals(m_full, type = "response")
+
+ggplot(residual_data, aes(x = temperature, y = residual)) +
+  geom_point(alpha = 0.4) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = ink) +
+  labs(x = "Water temperature (°C)",
+       y = "Residual growth (mm/month)")
+```
+
+We have checked whether `k` was adequate in our temperature-only model. Now we need to check it again because adding length and habitat can change the estimated temperature relationship and the residuals. `k.check()` returns the basis-dimension table without generating additional diagnostic plots.
+
+```{r}
+set.seed(316)
+mgcv::k.check(m_full)
+```
+
+In this table:
+
+- **`k'`** is the maximum available edf after constraints. For our temperature smooth, it is `k - 1`, so `k = 12` gives `k' = 11`.
+- **`edf`** describes the complexity used by the fitted smooth. An edf close to `k'` suggests that the available flexibility may be limiting the fit.
+- **`k-index`** compares residual variation among observations with similar predictor values to residual variation overall. A value near 1 is generally reassuring. A value substantially below 1 suggests that nearby observations have similar residuals, indicating a pattern the model has not captured.
+- **`p-value`** assesses how unusual that residual pattern is by randomly reshuffling the residuals. A small value suggests remaining structure that could reflect an inadequate basis dimension.
+
+A low k-index and small p-value are warning signs, especially when `edf` is close to `k'`. However, they do not prove that `k` is too small: missing predictors or other model problems can also create residual patterns.
+
+If the results suggest insufficient flexibility, increase `k`, refit the model, and compare the estimated curve, edf, and diagnostics. If the relationship changes little and the diagnostics are satisfactory, the original `k` was likely adequate.
+
+The p-value is simulation-based, so it can vary between runs. Setting the seed makes the check reproducible.
+
+We can also ensure the model has converged:
+
+```{r}
+# Inspect optimizer status separately from residual plots.
+m_full$converged
+m_full$outer.info$conv
+```
+
+### Deliberately restrict the basis, then increase it
+
+```{r}
+m_small <- gam(growth ~ s(temperature, k = 4) + length_c + habitat,
+               data = fish, method = "REML")
+m_large <- gam(growth ~ s(temperature, k = 24) + length_c + habitat,
+               data = fish, method = "REML")
+
+set.seed(316)
+mgcv::k.check(m_small)
+mgcv::k.check(m_full)
+mgcv::k.check(m_large)
+
+appraise(m_small, type = "deviance")
+appraise(m_large, type = "deviance")
+
+# Compare all three fitted shapes at length = 30 cm in Seagrass.
+check_grid <- data.frame(
+  temperature = seq(6, 24, length.out = 200),
+  length_c = 0,
+  habitat = factor("Seagrass", levels = levels(fish$habitat))
+)
+
+small_fit <- fitted_values(m_small, data = check_grid)
+
+small_fit$basis_size <- "k = 4"
+
+full_fit <- fitted_values(m_full, data = check_grid)
+
+full_fit$basis_size <- "k = 12"
+
+large_fit <- fitted_values(m_large, data = check_grid)
+
+large_fit$basis_size <- "k = 24"
+
+basis_fits <- rbind(small_fit, full_fit, large_fit)
+
+ggplot(basis_fits, aes(x = temperature, y = .fitted,
+                      linetype = basis_size)) +
+  geom_line(colour = ink, linewidth = 1) +
+  scale_linetype_manual(values = c("k = 4" = "dotted",
+                                   "k = 12" = "solid",
+                                   "k = 24" = "dashed")) +
+  labs(x = "Water temperature (°C)",
+       y = "Predicted growth (mm/month)", linetype = NULL)
+```
+
+Increasing `k` should be followed by a refit and a comparison of diagnostics and estimated relationships. We want sufficient capacity and stable conclusions, not the largest possible edf. There is no universal cutoff for an acceptable difference in predictions; judge it in response units and relative to uncertainty.
+
+### Concurvity and dependence
+
+Concurvity is the GAM analogue of collinearity: one model component can be approximated using other components. Values closer to 1 indicate more overlap in the measures reported here. Strong overlap can make separate effects difficult to estimate. There is no universal pass/fail threshold. Our predictors were generated independently, so this is a brief introduction rather than a deliberately problematic example.
+
+```{r}
+#| label: concurvity
+concurvity(m_full, full = TRUE)
+```
+
+These data contain independent fish. Repeated observations of the same fish, spatial clustering, or time-series observations would require additional consideration of dependence. Adding `s(year)` alone does not necessarily remove residual temporal autocorrelation. Likewise, GAM flexibility does not fix an inappropriate response distribution or missing predictors.
+
+### Optional extensions
+
+- Allow habitat-specific temperature curves with `habitat + s(temperature, by = habitat)`; this requires enough observations over the temperature range in each habitat.
+
+## Sources and further learning
+
+This is an original teaching sequence with newly written explanations and a reproducible simulated example. It combines the introductory topics below rather than reproducing their text, slides, or exercises. Source links also provide deeper explanations beyond this short class.
+
+| Resource | Connection to this tutorial |
+|------------------------------------|------------------------------------|
+| [Noam Ross, GAMs in R — Chapter 1](https://noamross.github.io/gams-in-r-course/chapter1/) | Linear-to-smooth progression; basis functions; complexity and penalties; multiple predictors. |
+| [Noam Ross, GAMs in R — Chapter 2](https://noamross.github.io/gams-in-r-course/chapter2/) | Interpreting smooths, uncertainty, model checking, and concurvity. |
+| [Michael Clark, Introduction to GAMs](https://m-clark.github.io/generalized-additive-models/introduction.html) | Connecting familiar regression to nonlinear predictor effects. |
+| [Simon Wood, mgcv: gam](https://stat.ethz.ch/R-manual/R-devel/library/mgcv/html/gam.html) | Model specification and smoothness selection. |
+| [Simon Wood, mgcv: choose.k](https://stat.ethz.ch/R-manual/R-devel/library/mgcv/html/choose.k.html) | Distinguishing basis dimension from penalization and checking an increased basis. |
+| [Simon Wood, mgcv: predict.gam](https://stat.ethz.ch/R-manual/R-devel/library/mgcv/html/predict.gam.html) | Prediction scales, standard errors, and smoothing-parameter uncertainty. |
+| [Simon Wood, mgcv: gam.check](https://stat.ethz.ch/R-manual/R-devel/library/mgcv/html/gam.check.html) | Diagnostic plots, convergence information, and basis-dimension checks. |
+
+### `gratia` reference
+
+- [`draw()`](https://gavinsimpson.github.io/gratia/reference/draw.gam.html): plot smooth effects.
+- [`basis()`](https://gavinsimpson.github.io/gratia/reference/basis.html): extract basis functions.
+- [`fitted_values()`](https://gavinsimpson.github.io/gratia/reference/fitted_values.html): fitted means and intervals on a chosen covariate grid.
+- [`appraise()`](https://gavinsimpson.github.io/gratia/reference/appraise.html): diagnostic plots.
+
+The code was checked against the package documentation, but could not be executed in R in this authoring environment. Run it with your installed R, `mgcv`, and `gratia` versions before teaching.
+
+Additional reference: Wood, S. N. (2017). *Generalized Additive Models: An Introduction with R* (2nd ed.). Chapman & Hall/CRC. [DOI](https://doi.org/10.1201/9781315370279).
